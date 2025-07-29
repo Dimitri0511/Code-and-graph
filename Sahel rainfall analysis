@@ -1,0 +1,367 @@
+setwd("C:/Users/27736/Desktop/Thesis/49181bb668ef8fe446390cdeb949bed7.zip")
+library(ncdf4)
+library(raster)
+library(tidyverse)
+library(dplyr)
+# Load the NetCDF file as a raster brick
+nc_path <- "C:/Users/27736/Desktop/Thesis/german future model/20-22/pr_Amon_AWI-CM-1-1-MR_ssp245_r1i1p1f1_gn_20150616-20990916.nc"
+r <- brick(nc_path, varname = "pr")
+library(stars)
+
+
+
+s <- read_stars(nc_path)
+df <- as.data.frame(s, xy = TRUE, na.rm = TRUE)
+
+### convert as data frame
+df2 <- as.data.frame(r, xy = TRUE, na.rm = TRUE)
+df_long2 <- df2 %>%
+  rename(lon = x, lat = y) %>%
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "date",
+    values_to = "precip"
+  ) %>%
+  mutate(
+    date = str_remove(date, "^X"),
+    date = as.Date(date, format = "%Y.%m.%d")
+  )
+#### the second has a problem
+df_long <- df %>%
+  rename(lon = x, lat = y) %>%               # Step 1: rename coordinates first
+  pivot_longer(
+    cols = starts_with("X"),                # Step 2: pivot all date columns
+    names_to = "date",
+    values_to = "precip"
+  ) %>%
+  mutate(
+    date = str_remove(date, "^X"),          # Step 3: clean and convert dates
+    date = as.Date(date, format = "%Y.%m.%d")
+  )
+
+df_long2 <- df_long2 %>%
+  mutate(Precip = precip * 86400)  # Convert from kg/m²/s to mm/day
+df_long2 <- df_long2 %>%
+  rename(precip_mm_day = Precip)
+##Monthly totals 
+hadgem5 <- df_long2 %>%
+  mutate(
+    days_in_month = days_in_month(date),
+    precip_monthly = precip_mm_day * days_in_month
+  )
+library(dplyr)
+library(lubridate)
+
+INM4F <- INM4F %>%
+  mutate(date = if_else(month(date) == 5,
+                        make_date(year(date), 9, day(date)),
+                        date))
+
+head(hadgem1)
+tail(hadgem1)
+head(hadgem2)
+tail(hadgem2)
+head(hadgem3)
+tail(hadgem3)
+head(hadgem4)
+tail(hadgem4)
+head(hadgem5)
+tail(hadgem5)
+### define function
+library(dplyr)
+library(lubridate)
+
+library(dplyr)
+library(lubridate)
+
+aggregate_hadgem <- function(df, band_number) {
+  df %>%
+    mutate(
+      group_id = paste0("Band", band_number),
+      month = floor_date(date, "month")
+    ) %>%
+    group_by(group_id, month) %>%
+    summarise(
+      precip_monthly = mean(precip_monthly, na.rm = TRUE),
+      .groups = "drop"
+    )
+}
+### apply to all 
+hadgem1_agg <- aggregate_hadgem(hadgem1, 1)
+hadgem2_agg <- aggregate_hadgem(hadgem2, 2)
+hadgem3_agg <- aggregate_hadgem(hadgem3, 3)
+hadgem4_agg <- aggregate_hadgem(hadgem4, 4)
+hadgem5_agg <- aggregate_hadgem(hadgem5, 5)
+### add lat and long
+hadgem1_agg <- hadgem1_agg %>%
+  mutate(lat_range = "10–12°N", lon_range = "15°W–40°E")
+
+hadgem2_agg <- hadgem2_agg %>%
+  mutate(lat_range = "12–14°N", lon_range = "15°W–40°E")
+
+hadgem3_agg <- hadgem3_agg %>%
+  mutate(lat_range = "16–18°N", lon_range = "15°W–40°E")
+
+hadgem4_agg <- hadgem4_agg %>%
+  mutate(lat_range = "18–20°N", lon_range = "15°W–40°E")
+hadgem5_agg <- hadgem5_agg %>%
+  mutate(lat_range = "20–22°N", lon_range = "15°W–40°E")
+hadgem_all_agg <- bind_rows(hadgem1_agg, hadgem2_agg, hadgem3_agg, hadgem4_agg,hadgem5_agg)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+
+hadgem_all_agg <- hadgem_all_agg %>%
+  filter(year(month) >= 1979, year(month) <= 2014)
+
+
+# Define custom labels and colors for each band
+custom_labels <- c(
+  Band1 = "Band1 (10–12°N, 15°W–40°E)",
+  Band2 = "Band2 (12–14°N, 15°W–40°E)",
+  Band3 = "Band3 (16–18°N, 15°W–40°E)",
+  Band4 = "Band4 (18–20°N, 15°W–40°E)",
+  Band5 = "Band5 (20–22°N, 15°W–40°E)"
+)
+
+custom_colors <- c(
+  Band1 = "darkblue",
+  Band2 = "lightblue",
+  Band3 = "gold",   # gold is a good yellow
+  Band4 = "yellow",
+  Band5 = "red"
+)
+
+# Plot
+ggplot(hadgem_all_agg, aes(x = month, y = precip_monthly, color = group_id)) +
+  geom_line() +
+  scale_color_manual(values = custom_colors, labels = custom_labels) +
+  labs(
+    title =  " Monthly Precipitation by latitude band (CMIP 6 NESM) ",
+    x = "Month",
+    y = "Precipitation (mm)",
+    color = "Band"
+  ) +
+  theme_minimal()
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+# Aggregate to annual precipitation per band
+hadgem_all_agg_annual <- hadgem_all_agg %>%
+  mutate(year = year(month)) %>%
+  group_by(group_id, year) %>%
+  summarise(
+    precip_annual = sum(precip_monthly, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Define custom labels and colors again
+custom_labels <- c(
+  Band1 = "Band1 (10–12°N, 15°W–40°E)",
+  Band2 = "Band2 (12–14°N, 15°W–40°E)",
+  Band3 = "Band3 (16–18°N, 15°W–40°E)",
+  Band4 = "Band4 (18–20°N, 15°W–40°E)",
+  Band5 = "Band5 (20–22°N, 15°W–40°E)"
+)
+
+custom_colors <- c(
+  Band1 = "darkblue",
+  Band2 = "lightblue",
+  Band3 = "gold",   # gold is a good yellow
+  Band4 = "yellow",
+  Band5 = "red"
+)
+
+# Plot annual time series
+ggplot(hadgem_all_agg_annual, aes(x = year, y = precip_annual, color = group_id)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  scale_color_manual(values = custom_colors, labels = custom_labels) +
+  labs(
+    title = "Annual Precipitation by latitude bands  (CMIP 6 NESM)",
+    x = "Year",
+    y = "Total Precipitation (mm)",
+    color = "Region"
+  ) +
+  theme_minimal()
+##### monthly trend
+monthly_trends_hadgem <- hadgem_all_agg %>%
+  mutate(
+    year = year(month),
+    month = month(month, label = TRUE)
+  ) %>%
+  group_by(group_id, year, month) %>%
+  summarise(
+    monthly_total = mean(precip_monthly, na.rm = TRUE),
+    .groups = "drop"
+  )
+library(ggplot2)
+library(dplyr)
+
+# Ensure months are ordered factors
+monthly_trends_hadgem$month <- factor(
+  monthly_trends_hadgem$month,
+  levels = c("Jun", "Jul", "Aug", "Sep")
+)
+
+# Define labels for each band
+Band_labels <- c(
+  Band1 = "Band1 (10–12°N, 15°W–40°E)",
+  Band2 = "Band2 (12–14°N, 15°W–40°E)",
+  Band3 = "Band3 (16–18°N, 15°W–40°E)",
+  Band4 = "Band4 (18–20°N, 15°W–40°E)",
+  Band5 = "Band5 (20–22°N, 15°W–40°E)"
+)
+
+# Add a new column with descriptive labels
+monthly_trends_hadgem <- monthly_trends_hadgem %>%
+  mutate(Band_label = Band_labels[group_id])
+
+# Create the plot
+ggplot(monthly_trends_hadgem, aes(x = year, y = monthly_total, color = month)) +
+  geom_line(size = 0.9) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", size = 0.6) +
+  facet_wrap(~Band_label, scales = "free_y") +
+  scale_color_manual(
+    values = c("Jun" = "skyblue", "Jul" = "blue", "Aug" = "purple", "Sep" = "red")
+  ) +
+  labs(
+    title = "Simulated monthly Precipitation Trends CMIP 6 (NESM)",
+    x = "Year",
+    y = "Monthly Precipitation (mm)",
+    color = "Month"
+  ) +
+  theme_minimal()
+
+### rainfall variability
+library(dplyr)
+library(lubridate)
+hadgem_JJAS <- hadgem_all_agg %>%
+  mutate(
+    month_name = month(month, label = TRUE),  # New column with month name (e.g., "Jun")
+    year = year(month)                        # New column with year
+  ) %>%
+  filter(month_name %in% c("Jun", "Jul", "Aug", "Sep")) %>%
+  group_by(group_id, year) %>%
+  summarise(JJAS_total = sum(precip_monthly, na.rm = TRUE), .groups = "drop")
+Band_labels <- c(
+  Band1 = "Band1 (10–12°N, 15°W–40°E)",
+  Band2 = "Band2 (12–14°N, 15°W–40°E)",
+  Band3 = "Band3 (16–18°N, 15°W–40°E)",
+  Band4 = "Band4 (18–20°N, 15°W–40°E)",
+  Band5 = "Band4 (20–22°N, 15°W–40°E)"
+)
+
+hadgem_JJAS <- hadgem_JJAS %>%
+  mutate(Band = Band_labels[group_id])
+ggplot(hadgem_JJAS, aes(x = Band, y = JJAS_total, fill = Band)) +
+  geom_boxplot() +
+  scale_fill_manual(
+    values = c(
+      "Band1 (10–12°N, 15°W–40°E)" = "blue",
+      "Band2 (12–14°N, 15°W–40°E)" = "lightblue",
+      "Band3 (16–18°N, 15°W–40°E)" = "gold",
+      "Band4 (18–20°N, 15°W–40°E)" = "yellow",
+      "Band5 (20–22°N, 15°W–40°E)" = "red"
+    )
+  ) +
+  labs(
+    title = "Future JJAS Rainfall Variability by Region CMIP6 (NESM)",
+    x = "Region",
+    y = "JJAS Total Rainfall (mm)",
+    fill = "hadgem Band"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 25, hjust = 1),
+    legend.position = "bottom"
+  )
+
+
+hadgem_decadal <- hadgem_JJAS %>%
+  mutate(decade = floor(year / 10) * 10) %>%
+  group_by(group_id, decade) %>%
+  summarise(
+    decadal_total = sum(JJAS_total, na.rm = TRUE),
+    .groups = "drop"
+  )
+Band_labels <- c(
+  Band1 = "Band1 (10–12°N, 15°W–40°E)",
+  Band2 = "Band2 (12–14°N, 15°W–40°E)",
+  Band3 = "Band3 (16–18°N, 15°W–40°E)",
+  Band4 = "Band4 (18–20°N, 15°W–40°E)",
+  Band5 = "Band5 (20–22°N, 15°W–40°E)"
+)
+
+hadgem_decadal <- hadgem_decadal %>%
+  mutate(Band = Band_labels[group_id])
+library(ggplot2)
+
+library(ggplot2)
+
+ggplot(hadgem_decadal, aes(x = decade, y = decadal_total)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "black", size = 2) +
+  facet_wrap(~ Band, scales = "free_y") +
+  labs(
+    title = " future decadal JJAS Rainfall Trends by Band CMIP6 (NESM)",
+    x = "Decade",
+    y = "Total JJAS Rainfall (mm)"
+  ) +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+monthly_slopes <- monthly_trends_hadgem %>%
+  group_by(group_id, month) %>%
+  group_modify(~ {
+    model <- lm(monthly_total ~ year, data = .x)
+    broom::tidy(model) %>% 
+      dplyr::filter(term == "year") %>%
+      dplyr::select(slope = estimate, p_value = p.value)
+  }) %>%
+  ungroup()
+
+library(tidyr)
+library(dplyr)
+library(tidyr)
+
+monthly_trend_table <- monthly_slopes %>%
+  mutate(
+    significance = case_when(
+      p_value < 0.001 ~ "***",
+      p_value < 0.01 ~ "**",
+      p_value < 0.05 ~ "*",
+      TRUE ~ ""
+    ),
+    slope_label = sprintf("%.2f%s", slope, significance)
+  ) %>%
+  select(group_id, month, slope_label) %>%
+  pivot_wider(names_from = month, values_from = slope_label) %>%
+  arrange(group_id)
+monthly_trend_table <- monthly_slopes %>%
+  dplyr::mutate(
+    significance = dplyr::case_when(
+      p_value < 0.001 ~ "***",
+      p_value < 0.01 ~ "**",
+      p_value < 0.05 ~ "*",
+      TRUE ~ ""
+    ),
+    slope_label = sprintf("%.2f%s", slope, significance)
+  ) %>%
+  dplyr::select(group_id, month, slope_label) %>%
+  tidyr::pivot_wider(names_from = month, values_from = slope_label) %>%
+  dplyr::arrange(group_id)
+
+
+library(ggplot2)
+
+ggplot(monthly_slopes, aes(x = month, y = as.factor(group_id), fill = slope)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = sprintf("%.2f", slope)), color = "black", size = 3) +
+  scale_fill_gradient2(low = "red", high = "blue", mid = "white", midpoint = 0) +
+  labs(x = "Month", y = "Latitude Band", fill = "Trend (mm/year)",
+       title = "Monthly Rainfall Trends by Latitude Band AWI (2015–2100)") +
+  theme_minimal#### matching coordinates
