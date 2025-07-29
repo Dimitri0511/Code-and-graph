@@ -1,0 +1,149 @@
+<img width="1103" height="434" alt="image" src="https://github.com/user-attachments/assets/904a44fd-21f0-419e-8d65-59d0c228a488" />
+<img width="1103" height="411" alt="image" src="https://github.com/user-attachments/assets/a2b0c1d0-aa0f-400f-9c9e-57a9b00eb773" />
+<img width="1145" height="538" alt="image" src="https://github.com/user-attachments/assets/ec9af315-a309-437c-b36e-55aa098d6e9f" />
+<img width="1088" height="426" alt="image" src="https://github.com/user-attachments/assets/32fe1c7d-8718-4730-8c49-1d13db02c6b6" />
+<img width="975" height="501" alt="image" src="https://github.com/user-attachments/assets/6cb07652-7385-4800-a8a0-81e940349025" />
+<img width="975" height="473" alt="image" src="https://github.com/user-attachments/assets/51210df3-2e42-43e9-a619-41d3b8c180de" />
+<img width="975" height="558" alt="image" src="https://github.com/user-attachments/assets/c6fd88ee-acbf-4908-b51e-4ca51c10865f" />
+<img width="975" height="454" alt="image" src="https://github.com/user-attachments/assets/c385c51e-4cbf-4797-b2f9-adeabca21b72" />
+install.packages("terra")
+install.packages("ncdf4")   # optional, for extra NetCDF support
+library(terra)
+library(ggplot2)
+library(dplyr)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+Load country polygons
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+# Get country centroids for labeling
+world_centroids <- st_centroid(world)
+
+# Define Sahel region bounding box
+sahel_box <- st_as_sfc(st_bbox(c(xmin = -15, xmax = 40, ymin = 10, ymax = 22), crs = st_crs(4326)))
+
+# Plot
+ggplot() +
+  geom_sf(data = world, fill = "lightgray", color = "white") +
+  geom_sf(data = sahel_box, fill = NA, color = "red", size = 1) +
+  geom_sf_text(data = world_centroids, aes(label = name), size = 3, color = "black") +
+  coord_sf(xlim = c(-20, 45), ylim = c(-35, 40)) +
+  annotation_scale(location = "bl", width_hint = 0.4) +
+  labs(title = "The Sahel Region",subtitle = "Latitudes 10–22°N, Longitudes 15°W–40°E") +
+  theme_minimal()
+# Define file path
+nc_path <- "C:/Users/27736/Desktop/Thesis/2022 flood area/202409.nc"
+# Load NetCDF file
+r <- terra::rast(nc_path)
+df_4 <- as.data.frame(r, xy = TRUE, na.rm = FALSE)
+print(r)
+names(r)
+### sahel
+# Define Sahel bounding box
+sahel_september2024 <- subset(df_4, 
+                   y >= 10 & y <= 22 & 
+                     x >= -15 & x <= 40)
+str(sahel_june2022)
+str(sahel_july2022)
+str(sahel_August2022)
+str(sahel_September2022)
+str(sahel_june2024)
+str(sahel_july2024)
+str(sahel_august2024)
+str(sahel_september2024)
+all_precip <- c(
+  sahel_june2022$precipitation,
+  sahel_july2022$precipitation,
+  sahel_August2022$precipitation,
+  sahel_September2022$precipitation,
+  sahel_june2024$precipitation,
+  sahel_july2024$precipitation,
+  sahel_august2024$precipitation,
+  sahel_september2024$precipitation
+)
+
+global_min <- min(all_precip, na.rm = TRUE)
+global_max <- max(all_precip, na.rm = TRUE)
+library(dplyr)
+
+sahel_all <- bind_rows(
+  mutate(sahel_june2022, month = "June", year = "2022"),
+  mutate(sahel_july2022, month = "July", year = "2022"),
+  mutate(sahel_August2022, month = "August", year = "2022"),
+  mutate(sahel_September2022, month = "September", year = "2022"),
+  mutate(sahel_june2024, month = "June", year = "2024"),
+  mutate(sahel_july2024, month = "July", year = "2024"),
+  mutate(sahel_august2024, month = "August", year = "2024"),
+  mutate(sahel_september2024, month = "September", year = "2024")
+)
+sahel_all$month <- factor(sahel_all$month, levels = c("June", "July", "August", "September"))
+
+ggplot() +
+  geom_tile(data = sahel_september2024, aes(x = x, y = y, fill = precipitation)) +
+  geom_sf(data = africa, fill = NA, color = "black") +
+  geom_sf(data = sahel_sf, fill = NA, color = "red", size = 0.4) +
+  geom_sf_label(data = sahel_sf, aes(label = name), size = 2) +
+  scale_fill_viridis_c(
+    name = "Precipitation (mm)",
+    direction = -1,
+    limits = c(0, 1500),
+    breaks = c(0, 300, 600, 900, 1200, 1500),
+    oob = scales::squish
+  ) +
+  coord_sf(xlim = c(-15, 40), ylim = c(0, 22), expand = FALSE) +
+  labs(
+    title = "sahel rainfall for September 2024 (MSWEP)",
+    x = "Longitude", y = "Latitude"
+  ) +
+  theme_minimal() +
+  theme(strip.text = element_text(face = "bold"))
+library(dplyr)
+
+# Sum over months for each year
+jj_total <- sahel_all %>%
+  group_by(x, y, year) %>%
+  summarise(total_precip = sum(precipitation), .groups = "drop")
+ggplot(jj_total) +
+  geom_tile(aes(x = x, y = y, fill = total_precip)) +
+  geom_sf(data = africa, fill = NA, color = "black") + geom_sf_label(data = sahel_sf, aes(label = name), size = 2) +
+  facet_wrap(~year) +
+  scale_fill_viridis_c(
+    name = "JJAS Total (mm)",
+    limits = c(0, 1500),
+    breaks = seq(0, 1500, 300),
+    oob = scales::squish,
+    direction = -1
+  ) +
+  coord_sf(xlim = c(-15, 40), ylim = c(0, 22), expand = FALSE) +
+  labs(title = "Total Rainfall in the Sahel (JJAS 2022 vs 2024)",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal()
+
+jj_diff <- jj_total %>%
+  pivot_wider(names_from = year, values_from = total_precip) %>%
+  mutate(diff = `2024` - `2022`)
+
+ggplot(jj_diff) +
+  geom_tile(aes(x = x, y = y, fill = diff)) +
+  geom_sf(data = africa, fill = NA, color = "black") +geom_sf_label(data = sahel_sf, aes(label = name), size = 2) +
+  scale_fill_gradient2(
+    name = "Difference (mm)",
+    low = "red", mid = "white", high = "blue", midpoint = 0
+  ) +
+  coord_sf(xlim = c(-15, 40), ylim = c(0, 22), expand = FALSE) +
+  labs(title = "Change in Total JJAS Rainfall: 2024 – 2022",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal()
+
+lat_profile <- sahel_all %>%
+  group_by(y, year) %>%
+  summarise(mean_precip = s(precipitation), .groups = "drop")
+
+ggplot(lat_profile, aes(x = y, y = mean_precip, color = year)) +
+  geom_line(size = 1) +
+  labs(title = "Mean Rainfall by Latitude (JJAS)",
+       x = "Latitude", y = "Mean Rainfall (mm)",
+       color = "Year") +
+  theme_minimal()
+
